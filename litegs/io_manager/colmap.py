@@ -182,15 +182,18 @@ def load_frames(path:str,image_dir:str)->tuple[dict[int,PinHoleCameraInfo],list[
     ImageFrameList:list[ImageFrame]=[]
 
     for CameraArg in cam_intrinsics.values():
+        print("camera args:",CameraArg)
         if(CameraArg.model=="PINHOLE"):
             CameraInfoDict[CameraArg.id]=PinHoleCameraInfo(CameraArg.id,CameraArg.width,CameraArg.height,CameraArg.params)
 
+    print("Found {} cameras extrinsics, {} cameras intrinsics.".format(len(cam_extrinsics), len(cam_intrinsics)))
     for ImgArg in cam_extrinsics.values():
         if ImgArg.camera_id in CameraInfoDict.keys():
             camera_frame=ImageFrame(ImgArg.id,ImgArg.viewtransform_rotation,ImgArg.tvec,ImgArg.camera_id,ImgArg.name,os.path.join(path,image_dir,ImgArg.name),ImgArg.xys)
             ImageFrameList.append(camera_frame)
     ImageFrameListSorted = sorted(ImageFrameList.copy(), key = lambda x : x.name)
 
+    print("Loaded {} cameras and {} frames from COLMAP results.".format(len(CameraInfoDict),len(ImageFrameListSorted)))
     return CameraInfoDict,ImageFrameListSorted
 
 

@@ -31,6 +31,7 @@ def start(lp:arguments.ModelParams,op:arguments.OptimizationParams,pp:arguments.
     camera_frames:list[data.ImageFrame]=None
     cameras_info,camera_frames,init_xyz,init_color=io_manager.load_colmap_result(lp.source_path,lp.images)#lp.sh_degree,lp.resolution
 
+    print("Loaded {} cameras and {} frames.".format(len(cameras_info),len(camera_frames)))
     #preload
     for camera_frame in camera_frames:
         camera_frame.load_image(lp.resolution)
