@@ -65,6 +65,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--matcher", choices=["exhaustive", "sequential"], default="sequential", help="Matching strategy")
     p.add_argument("--single_camera", action="store_true", help="Treat all frames as one camera (video-friendly)")
     p.add_argument("--threads", type=int, default=8, help="Mapper thread count")
+    p.add_argument("--camera_model", default="PINHOLE", help="COLMAP camera model (e.g., PINHOLE, SIMPLE_RADIAL)")
     return p.parse_args()
 
 
@@ -93,6 +94,8 @@ def main() -> int:
     ]
     if args.single_camera:
         feat_cmd += ["--ImageReader.single_camera", "1"]
+    if args.camera_model:
+        feat_cmd += ["--ImageReader.camera_model", args.camera_model]
     run_cmd(feat_cmd)
 
     if args.matcher == "sequential":
