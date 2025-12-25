@@ -43,43 +43,40 @@ Gaussian splatting is a powerful technique used in various computer graphics and
 
 ## Getting Started
 
-1. Install simple-knn
+1. Install uv (https://github.com/astral-sh/uv).
+
+2. Make sure CUDA Toolkit + GPU drivers are installed and `nvcc` is available on PATH (required to build CUDA extensions).
+
+3. From this repo root (`thirdparty/litegs`), create and sync the environment:
 
     ```bash
-    pip install litegs/submodules/simple-knn
+    uv venv
+    uv sync
     ```
 
-2. Install fused-ssim
+    This installs Python deps and builds local extensions from:
+    `litegs/submodules/simple-knn`, `litegs/submodules/fused_ssim`,
+    and `litegs/submodules/gaussian_raster`.
 
-    ```bash
-    pip install litegs/submodules/fussed_ssim
+    If you need to install the CUDA extensions manually (no build isolation):
+
+    ```powershell
+    pip install .\litegs\submodules\simple-knn --no-build-isolation -v
+    pip install .\litegs\submodules\fused_ssim --no-build-isolation -v
+    pip install .\litegs\submodules\gaussian_raster --no-build-isolation -v
     ```
-    
 
-3. Install litegs_fused
-    
-    ```bash
-    pip install litegs/submodules/gaussian_raster
-    ```
-
-    If you need the cmake project(e.g. CUDA Debug in Visual Studio)：
-
+4. If you need the CMake project (e.g. CUDA Debug in Visual Studio):
     ```bash
     cd litegs/submodules/gaussian_raster
     mkdir ./build
     cd ./build
-    #for Windows PowerShell: $env:CMAKE_PREFIX_PATH = (python -c "import torch; print(torch.utils.cmake_prefix_path)")
+    # for Windows PowerShell: $env:CMAKE_PREFIX_PATH = (python -c "import torch; print(torch.utils.cmake_prefix_path)")
     export CMAKE_PREFIX_PATH=$(python -c "import torch; print(torch.utils.cmake_prefix_path)")
     cmake ../
     cmake --build . --config Release
     ```
 
-4. Install requirments
-
-    ```bash
-    pip install -r requirement.txt
-    ```
-    
 ### Train
 Begin training with the following command:
 

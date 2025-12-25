@@ -12,10 +12,13 @@ def cluster_points(chunksize,*args:torch.Tensor) -> tuple[torch.Tensor, ...]:
     '''
     output=[]
     for input in args:
-        if input.shape[-1]%chunksize!=0:
-            padding_num=input.shape[-1]%chunksize
-            padding_num=chunksize-padding_num
-            input=torch.concat([input,input[...,-padding_num:]],dim=-1).contiguous()
+        n = input.shape[-1]
+        if n == 0:
+            raise ValueError("cluster_points expects at least 1 element")
+        if n % chunksize != 0:
+            padding_num = chunksize - (n % chunksize)
+            pad = input[..., -1:].expand(*input.shape[:-1], padding_num)
+            input = torch.concat([input, pad], dim=-1).contiguous()
         chunks_num=int(input.shape[-1]/chunksize)
         output.append(input.view(*input.shape[:-1],chunks_num,chunksize))
     return *output,
