@@ -31,7 +31,7 @@ def ensure_colmap() -> str:
     """
     # prefer bundled
     here = Path(__file__).resolve().parents[1]  # .../litegs
-    bundled = here / "tools" / "glomap"
+    bundled = here / "tools" / "colmap"
     candidates = [
         bundled / "COLMAP.bat",
         bundled / "bin" / "colmap.exe",
@@ -46,6 +46,26 @@ def ensure_colmap() -> str:
         raise FileNotFoundError("colmap not found (checked tools/colmap and PATH)")
     return colmap
 
+def ensure_glomap() -> str:
+    """
+    Resolve a GLOMAP executable. Prefer the bundled tools/glomap if present,
+    otherwise fall back to PATH.
+    """
+    # prefer bundled
+    here = Path(__file__).resolve().parents[1]  # .../litegs
+    bundled = here / "tools" / "glomap"
+    candidates = [
+        bundled / "bin" / "glomap.exe",
+        bundled / "bin" / "glomap",
+    ]
+    for c in candidates:
+        if c.exists():
+            return str(c)
+
+    glomap = shutil.which("glomap")
+    if not glomap:
+        raise FileNotFoundError("glomap not found (checked tools/colmap and PATH)")
+    return glomap
 
 def run_cmd(cmd: list[str], cwd: Path | None = None) -> None:
     print("Running:", " ".join(cmd))
@@ -72,6 +92,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     colmap = ensure_colmap()
+    glomap = ensure_glomap()
 
     images = Path(args.images).expanduser().resolve()
     out_root = Path(args.out).expanduser().resolve()
@@ -105,7 +126,7 @@ def main() -> int:
     run_cmd(match_cmd)
 
     mapper_cmd = [
-        colmap,
+        glomap,
         "mapper",
         "--database_path",
         str(db_path),
@@ -113,8 +134,8 @@ def main() -> int:
         str(images),
         "--output_path",
         str(sparse_dir),
-        "--Mapper.num_threads",
-        str(args.threads),
+        # "--Mapper.num_threads",
+        # str(args.threads),
     ]
     run_cmd(mapper_cmd)
 
