@@ -31,7 +31,7 @@ def ensure_colmap() -> str:
     """
     # prefer bundled
     here = Path(__file__).resolve().parents[1]  # .../litegs
-    bundled = here / "tools" / "colmap"
+    bundled = here / "tools" / "glomap"
     candidates = [
         bundled / "COLMAP.bat",
         bundled / "bin" / "colmap.exe",
