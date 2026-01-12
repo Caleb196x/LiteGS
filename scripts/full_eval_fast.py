@@ -51,23 +51,23 @@ parser = ArgumentParser(description="Full evaluation script parameters")
 parser.add_argument("--skip_training", action="store_true")
 parser.add_argument("--output_path", default="./output")
 parser.add_argument('--mipnerf360', "-m360", required=True, type=str)
-parser.add_argument("--tanksandtemples", "-tat", required=True, type=str)
-parser.add_argument("--deepblending", "-db", required=True, type=str)
+parser.add_argument("--tanksandtemples", "-tat", required=False, type=str)
+parser.add_argument("--deepblending", "-db", required=False, type=str)
 args, _ = parser.parse_known_args()
 
 
 datasets={
     "mipnerf360_indoor":["bicycle", "flowers", "garden", "stump", "treehill"],
     "mipnerf360_outdoor":["room", "counter", "kitchen", "bonsai"],
-    "tanksandtemples":["truck", "train"],
-    "deepblending":["drjohnson", "playroom"],
+    # "tanksandtemples":["truck", "train"],
+    # "deepblending":["drjohnson", "playroom"],
 }
 
 img_folder={
     "mipnerf360_indoor":"images_4",
     "mipnerf360_outdoor":"images_2",
-    "tanksandtemples":"images",
-    "deepblending":"images",
+    # "tanksandtemples":"images",
+    # "deepblending":"images",
 }
 
 fast_config="--iterations 10000 --position_lr_max_steps 10000 --position_lr_final 0.000016 --densification_interval 2"
@@ -90,7 +90,7 @@ if not args.skip_training:
             results[scene_name]={target_primitives:{}}
             print("scene:{} #primitive:{}".format(scene_name,target_primitives))
 
-            process = subprocess.Popen(["python","example_train.py"]+training_args.split(' '), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            process = subprocess.Popen([".litegsenv/Scripts/python.exe","example_train.py"]+training_args.split(' '), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             stdout, stderr = process.communicate()
             print(stderr)
             print(stdout)

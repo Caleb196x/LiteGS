@@ -64,7 +64,7 @@ def __read_intrinsics_text(path):
                 elems = line.split()
                 camera_id = int(elems[0])
                 model = elems[1]
-                assert model == "PINHOLE", "While the loader support other types, the rest of the code assumes PINHOLE"
+                # assert model == "PINHOLE", "While the loader support other types, the rest of the code assumes PINHOLE"
                 width = int(elems[2])
                 height = int(elems[3])
                 params = np.array(tuple(map(float, elems[4:])))
@@ -181,10 +181,16 @@ def load_frames(path:str,image_dir:str)->tuple[dict[int,PinHoleCameraInfo],list[
     CameraInfoDict:dict[int,PinHoleCameraInfo]={}
     ImageFrameList:list[ImageFrame]=[]
 
+    supported_models = {"PINHOLE", "OPENCV", "SIMPLE_PINHOLE"}
     for CameraArg in cam_intrinsics.values():
         print("camera args:",CameraArg)
-        if(CameraArg.model=="PINHOLE"):
-            CameraInfoDict[CameraArg.id]=PinHoleCameraInfo(CameraArg.id,CameraArg.width,CameraArg.height,CameraArg.params)
+        if CameraArg.model not in supported_models:
+            print(f"Skipping unsupported camera model: {CameraArg.model}")
+            continue
+        params = CameraArg.params
+        if CameraArg.model == "SIMPLE_PINHOLE":
+            params = np.array([params[0], params[0]])
+        CameraInfoDict[CameraArg.id]=PinHoleCameraInfo(CameraArg.id,CameraArg.width,CameraArg.height,params)
 
     print("Found {} cameras extrinsics, {} cameras intrinsics.".format(len(cam_extrinsics), len(cam_intrinsics)))
     for ImgArg in cam_extrinsics.values():

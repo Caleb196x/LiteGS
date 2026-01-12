@@ -21,6 +21,7 @@ import argparse
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -67,15 +68,20 @@ def ensure_glomap() -> str:
         raise FileNotFoundError("glomap not found (checked tools/colmap and PATH)")
     return glomap
 
-def run_cmd(cmd: list[str], cwd: Path | None = None) -> None:
-    print("Running:", " ".join(cmd))
+def run_cmd(cmd: list[str], cwd: Path | None = None, label: str | None = None) -> float:
+    prefix = f"[{label}] " if label else ""
+    print(f"{prefix}Running: {' '.join(cmd)}")
+    start = time.perf_counter()
     proc = subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    elapsed = time.perf_counter() - start
     if proc.returncode != 0:
         if proc.stdout:
             print(proc.stdout)
         if proc.stderr:
             print(proc.stderr, file=sys.stderr)
-        raise RuntimeError(f"Command failed with exit code {proc.returncode}")
+        raise RuntimeError(f"{prefix}Command failed with exit code {proc.returncode} after {elapsed:.2f}s")
+    print(f"{prefix}Done in {elapsed:.2f}s")
+    return elapsed
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,12 +90,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out", required=True, help="Output root (database.db and sparse/0 will be written here)")
     p.add_argument("--matcher", choices=["exhaustive", "sequential"], default="sequential", help="Matching strategy")
     p.add_argument("--single_camera", action="store_true", help="Treat all frames as one camera (video-friendly)")
-    p.add_argument("--threads", type=int, default=8, help="Mapper thread count")
-    p.add_argument("--camera_model", default="PINHOLE", help="COLMAP camera model (e.g., PINHOLE, SIMPLE_RADIAL)")
+    p.add_argument("--threads", type=int, default=16, help="Mapper thread count")
+    p.add_argument("--camera_model", default="OPENCV", help="COLMAP camera model (e.g., PINHOLE, SIMPLE_RADIAL)")
+    p.add_argument("--use_gpu", type=int, choices=[0, 1], default=1,
+                   help="Use GPU for SIFT (default: 1)")
     return p.parse_args()
 
 
 def main() -> int:
+    total_start = time.perf_counter()
     args = parse_args()
     colmap = ensure_colmap()
     glomap = ensure_glomap()
@@ -117,13 +126,15 @@ def main() -> int:
         feat_cmd += ["--ImageReader.single_camera", "1"]
     if args.camera_model:
         feat_cmd += ["--ImageReader.camera_model", args.camera_model]
-    run_cmd(feat_cmd)
+    run_cmd(feat_cmd, label="feature_extractor")
 
     if args.matcher == "sequential":
-        match_cmd = [colmap, "sequential_matcher", "--database_path", str(db_path)]
+        match_cmd = [colmap, "sequential_matcher", 
+                     "--database_path", str(db_path)]
     else:
-        match_cmd = [colmap, "exhaustive_matcher", "--database_path", str(db_path)]
-    run_cmd(match_cmd)
+        match_cmd = [colmap, "exhaustive_matcher", 
+                     "--database_path", str(db_path)]
+    run_cmd(match_cmd, label="matcher")
 
     mapper_cmd = [
         glomap,
@@ -136,8 +147,10 @@ def main() -> int:
         str(sparse_dir),
         # "--Mapper.num_threads",
         # str(args.threads),
+        # "--Mapper.ba_global_function_tolerance",
+        # "0.000001",
     ]
-    run_cmd(mapper_cmd)
+    run_cmd(mapper_cmd, label="mapper")
 
     model_dir = sparse_dir / "0"
     if model_dir.exists():
@@ -152,11 +165,13 @@ def main() -> int:
             "TXT",
         ]
         try:
-            run_cmd(converter_cmd)
+            run_cmd(converter_cmd, label="model_converter")
         except Exception as e:
             print(f"model_converter failed (bin is still usable): {e}", file=sys.stderr)
 
     print(f"Done. Sparse model at: {model_dir}")
+    total_elapsed = time.perf_counter() - total_start
+    print(f"Total time: {total_elapsed:.2f}s")
     return 0
 
 
