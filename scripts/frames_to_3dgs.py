@@ -18,8 +18,11 @@ are set automatically to the workspace layout produced here.
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -162,6 +165,105 @@ def build_training_params(args: argparse.Namespace, workspace: Path, model_path:
     return lp, op, pp, dp
 
 
+METRICS_PATTERN = re.compile(r"\b(SSIM|PSNR|LPIPS)\s*:?\s*([+-]?\d+(?:\.\d+)?)")
+
+
+def parse_metrics_output(output: str) -> dict:
+    metrics_by_label: dict[str, dict] = {}
+    current_label = ""
+    for line in output.splitlines():
+        trimmed = line.strip()
+        if not trimmed:
+            continue
+        label = parse_scene_label(trimmed)
+        if label:
+            current_label = label
+            continue
+        match = METRICS_PATTERN.search(trimmed)
+        if not match or not current_label:
+            continue
+        metric_name = match.group(1)
+        value = float(match.group(2))
+        entry = metrics_by_label.setdefault(current_label, {})
+        if metric_name == "SSIM":
+            entry["ssim_metrics"] = value
+        elif metric_name == "PSNR":
+            entry["psnr_metrics"] = value
+        elif metric_name == "LPIPS":
+            entry["lpip_metrics"] = value
+
+    if not metrics_by_label:
+        raise RuntimeError("No metrics parsed from metrics output.")
+    for label, entry in metrics_by_label.items():
+        missing = {"ssim_metrics", "psnr_metrics", "lpip_metrics"} - entry.keys()
+        if missing:
+            raise RuntimeError(f"Incomplete metrics for {label}: missing {sorted(missing)}")
+
+    result: dict[str, dict] = {}
+    if "Trainingset" in metrics_by_label:
+        result["train"] = metrics_by_label["Trainingset"]
+    if "Testset" in metrics_by_label:
+        result["test"] = metrics_by_label["Testset"]
+    return result
+
+
+def parse_scene_label(line: str) -> str:
+    if "Scene:" not in line:
+        return ""
+    _, _, rest = line.partition("Scene:")
+    rest = rest.strip()
+    if not rest:
+        return ""
+    parts = rest.rsplit(None, 1)
+    if len(parts) != 2:
+        return ""
+    label = parts[1]
+    if label not in {"Trainingset", "Testset"}:
+        return ""
+    return label
+
+
+def run_metrics(args: argparse.Namespace, workspace: Path, model_path: Path, image_dir_name: str) -> dict:
+    metrics_script = ROOT / "example_metrics.py"
+    cmd = [
+        sys.executable,
+        str(metrics_script),
+        "-s",
+        str(workspace),
+        "-m",
+        str(model_path),
+        "-i",
+        image_dir_name,
+        "--sh_degree",
+        str(args.sh_degree),
+        "--resolution",
+        str(args.resolution),
+        "--cluster_size",
+        str(args.cluster_size),
+        "--eval",
+    ]
+    if args.white_background:
+        cmd.append("--white_background")
+    if args.learnable_viewproj:
+        cmd.append("--learnable_viewproj")
+    if args.input_color_type:
+        cmd += ["--input_color_type", str(args.input_color_type)]
+
+    print(f"[metrics] Running: {' '.join(cmd)}")
+    proc = subprocess.run(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    output = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
+    if proc.returncode != 0:
+        if output.strip():
+            print(output)
+        raise RuntimeError(f"[metrics] example_metrics.py failed with exit code {proc.returncode}")
+
+    metrics = parse_metrics_output(output)
+    metrics_path = model_path / "metrics.json"
+    metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    print(f"[metrics] Saved metrics to {metrics_path}")
+    return metrics
+
+
 def parse_args() -> argparse.Namespace:
     lp_cdo, op_cdo, pp_cdo, dp_cdo = litegs.config.get_default_arg()
     parser = argparse.ArgumentParser(description="Frames -> COLMAP/GLOMAP -> LiteGS 3DGS reconstruction")
@@ -216,6 +318,8 @@ def main() -> int:
 
     lp, op, pp, dp = build_training_params(args, workspace, model_path, image_dir_name)
     litegs.training.start(lp, op, pp, dp, args.test_epochs, args.save_epochs, args.checkpoint_epochs, args.start_checkpoint)
+    metrics = run_metrics(args, workspace, model_path, image_dir_name)
+    print(f"[metrics] Results: {metrics}")
     return 0
 
 

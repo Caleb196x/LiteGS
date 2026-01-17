@@ -26,6 +26,8 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_epochs", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--save_image", action="store_true")
+    parser.add_argument("--analyze_per_image", default=False, action="store_true")   # 开启 per-image 分析功能
+    parser.add_argument("--worst_percent", type=float, default=0.05)  # 最差比例，默认5%
     args = parser.parse_args(sys.argv[1:])
     
     lp=litegs.arguments.ModelParams.extract(args)
@@ -46,6 +48,13 @@ if __name__ == "__main__":
             pass
         os.makedirs(os.path.join(lp.model_path,"Trainingset"),exist_ok=True)
         os.makedirs(os.path.join(lp.model_path,"Testset"),exist_ok=True)
+
+    if args.analyze_per_image:
+        try:
+            shutil.rmtree(os.path.join(lp.model_path,"WorstViews"))
+        except:
+            pass
+        os.makedirs(os.path.join(lp.model_path,"WorstViews"),exist_ok=True)
 
     #preload
     for camera_frame in camera_frames:
@@ -105,6 +114,8 @@ if __name__ == "__main__":
             ssim_list=[]
             psnr_list=[]
             lpips_list=[]
+            if args.analyze_per_image:
+                metrics_records=[]  # 存储 {name, psnr, ssim, lpips, img, gt} 的列表
             for index,(view_matrix,proj_matrix,frustumplane,gt_image,idx) in enumerate(loader):
                 view_matrix=view_matrix.cuda()
                 proj_matrix=proj_matrix.cuda()
@@ -127,9 +138,21 @@ if __name__ == "__main__":
                 img,transmitance,depth,normal,primitive_visible=litegs.render.render(view_matrix,proj_matrix,culled_xyz,culled_scale,culled_rot,culled_color,culled_opacity,
                                                             lp.sh_degree,gt_image.shape[2:],pp)
                 psnr_value=psnr_metrics(img,gt_image)
-                ssim_list.append(ssim_metrics(img,gt_image).unsqueeze(0))
+                ssim_value=ssim_metrics(img,gt_image)
+                lpips_value=lpip_metrics(img,gt_image)
+                ssim_list.append(ssim_value.unsqueeze(0))
                 psnr_list.append(psnr_value.unsqueeze(0))
-                lpips_list.append(lpip_metrics(img,gt_image).unsqueeze(0))
+                lpips_list.append(lpips_value.unsqueeze(0))
+                if args.analyze_per_image:
+                    frame_name=loader.dataset.frames[int(idx.item())].name
+                    metrics_records.append({
+                        'name': frame_name,
+                        'psnr': float(psnr_value),
+                        'ssim': float(ssim_value),
+                        'lpips': float(lpips_value),
+                        'img': img.detach().cpu()[0].permute(1,2,0).numpy(),
+                        'gt': gt_image.detach().cpu()[0].permute(1,2,0).numpy()
+                    })
                 if loader_name=="Testset" and args.save_image:
                     plt.imsave(os.path.join(lp.model_path,loader_name,"{}-{:.2f}-rd.png".format(index,float(psnr_value))),img.detach().cpu()[0].permute(1,2,0).numpy())
                     plt.imsave(os.path.join(lp.model_path,loader_name,"{}-{:.2f}-gt.png".format(index,float(psnr_value))),gt_image.detach().cpu()[0].permute(1,2,0).numpy())
@@ -142,3 +165,47 @@ if __name__ == "__main__":
             print("  PSNR : {:>12.7f}".format(float(psnr_mean)))
             print("  LPIPS: {:>12.7f}".format(float(lpips_mean)))
             print("")
+
+            if args.analyze_per_image:
+                # 计算综合评分（归一化后加权）
+                # 公式: score = normalized_psnr * 0.4 + normalized_ssim * 0.3 - normalized_lpips * 0.3
+                # 分数越低越差
+                psnr_values = [r['psnr'] for r in metrics_records]
+                ssim_values = [r['ssim'] for r in metrics_records]
+                lpips_values = [r['lpips'] for r in metrics_records]
+
+                psnr_min, psnr_max = min(psnr_values), max(psnr_values)
+                ssim_min, ssim_max = min(ssim_values), max(ssim_values)
+                lpips_min, lpips_max = min(lpips_values), max(lpips_values)
+
+                for record in metrics_records:
+                    norm_psnr = (record['psnr'] - psnr_min) / (psnr_max - psnr_min + 1e-8)
+                    norm_ssim = (record['ssim'] - ssim_min) / (ssim_max - ssim_min + 1e-8)
+                    norm_lpips = (record['lpips'] - lpips_min) / (lpips_max - lpips_min + 1e-8)
+                    record['score'] = norm_psnr * 0.4 + norm_ssim * 0.3 - norm_lpips * 0.3
+
+                # 按综合评分排序（升序，最差在前）
+                sorted_records = sorted(metrics_records, key=lambda x: x['score'])
+                worst_count = max(1, int(len(sorted_records) * args.worst_percent))
+                worst_records = sorted_records[:worst_count]
+
+                # 输出 per-image 指标表
+                print("  Per-image metrics:")
+                print("  {:<30} {:>10} {:>10} {:>10} {:>10}".format("Name", "PSNR", "SSIM", "LPIPS", "Score"))
+                print("  " + "-" * 74)
+                for record in sorted_records:
+                    print("  {:<30} {:>10.4f} {:>10.4f} {:>10.4f} {:>10.4f}".format(
+                        record['name'], record['psnr'], record['ssim'], record['lpips'], record['score']))
+
+                # 输出最差视角并保存图片
+                print("")
+                print("  Worst {:.0f}% views ({} images):".format(args.worst_percent*100, worst_count))
+                for record in worst_records:
+                    print("    {} - PSNR: {:.4f}, SSIM: {:.4f}, LPIPS: {:.4f}, Score: {:.4f}".format(
+                        record['name'], record['psnr'], record['ssim'], record['lpips'], record['score']))
+                    # 保存渲染结果和GT图片
+                    plt.imsave(os.path.join(lp.model_path, "WorstViews", "{}_render.png".format(record['name'])),
+                               record['img'])
+                    plt.imsave(os.path.join(lp.model_path, "WorstViews", "{}_gt.png".format(record['name'])),
+                               record['gt'])
+                print("")
