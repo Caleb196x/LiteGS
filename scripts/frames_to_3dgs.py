@@ -20,7 +20,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -165,64 +164,6 @@ def build_training_params(args: argparse.Namespace, workspace: Path, model_path:
     return lp, op, pp, dp
 
 
-METRICS_PATTERN = re.compile(r"\b(SSIM|PSNR|LPIPS)\s*:?\s*([+-]?\d+(?:\.\d+)?)")
-
-
-def parse_metrics_output(output: str) -> dict:
-    metrics_by_label: dict[str, dict] = {}
-    current_label = ""
-    for line in output.splitlines():
-        trimmed = line.strip()
-        if not trimmed:
-            continue
-        label = parse_scene_label(trimmed)
-        if label:
-            current_label = label
-            continue
-        match = METRICS_PATTERN.search(trimmed)
-        if not match or not current_label:
-            continue
-        metric_name = match.group(1)
-        value = float(match.group(2))
-        entry = metrics_by_label.setdefault(current_label, {})
-        if metric_name == "SSIM":
-            entry["ssim_metrics"] = value
-        elif metric_name == "PSNR":
-            entry["psnr_metrics"] = value
-        elif metric_name == "LPIPS":
-            entry["lpip_metrics"] = value
-
-    if not metrics_by_label:
-        raise RuntimeError("No metrics parsed from metrics output.")
-    for label, entry in metrics_by_label.items():
-        missing = {"ssim_metrics", "psnr_metrics", "lpip_metrics"} - entry.keys()
-        if missing:
-            raise RuntimeError(f"Incomplete metrics for {label}: missing {sorted(missing)}")
-
-    result: dict[str, dict] = {}
-    if "Trainingset" in metrics_by_label:
-        result["train"] = metrics_by_label["Trainingset"]
-    if "Testset" in metrics_by_label:
-        result["test"] = metrics_by_label["Testset"]
-    return result
-
-
-def parse_scene_label(line: str) -> str:
-    if "Scene:" not in line:
-        return ""
-    _, _, rest = line.partition("Scene:")
-    rest = rest.strip()
-    if not rest:
-        return ""
-    parts = rest.rsplit(None, 1)
-    if len(parts) != 2:
-        return ""
-    label = parts[1]
-    if label not in {"Trainingset", "Testset"}:
-        return ""
-    return label
-
-
 def run_metrics(args: argparse.Namespace, workspace: Path, model_path: Path, image_dir_name: str) -> dict:
     metrics_script = ROOT / "example_metrics.py"
     cmd = [
@@ -257,10 +198,11 @@ def run_metrics(args: argparse.Namespace, workspace: Path, model_path: Path, ima
             print(output)
         raise RuntimeError(f"[metrics] example_metrics.py failed with exit code {proc.returncode}")
 
-    metrics = parse_metrics_output(output)
     metrics_path = model_path / "metrics.json"
-    metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-    print(f"[metrics] Saved metrics to {metrics_path}")
+    if not metrics_path.exists():
+        raise RuntimeError(f"[metrics] metrics.json not found at {metrics_path}")
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    print(f"[metrics] Loaded metrics from {metrics_path}")
     return metrics
 
 

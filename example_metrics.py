@@ -109,6 +109,9 @@ if __name__ == "__main__":
     else:
         loaders={"Trainingset":train_loader}
 
+    metrics_output = {}
+    label_map = {"Trainingset": "train", "Testset": "test"}
+
     with torch.no_grad():
         for loader_name,loader in loaders.items():
             ssim_list=[]
@@ -160,6 +163,14 @@ if __name__ == "__main__":
             psnr_mean=torch.concat(psnr_list,dim=0).mean()
             lpips_mean=torch.concat(lpips_list,dim=0).mean()
 
+            label = label_map.get(loader_name)
+            if label:
+                metrics_output[label] = {
+                    "ssim_metrics": float(ssim_mean),
+                    "psnr_metrics": float(psnr_mean),
+                    "lpip_metrics": float(lpips_mean),
+                }
+
             print("  Scene:{0}".format(lp.model_path+" "+loader_name))
             print("  SSIM : {:>12.7f}".format(float(ssim_mean)))
             print("  PSNR : {:>12.7f}".format(float(psnr_mean)))
@@ -209,3 +220,8 @@ if __name__ == "__main__":
                     plt.imsave(os.path.join(lp.model_path, "WorstViews", "{}_gt.png".format(record['name'])),
                                record['gt'])
                 print("")
+
+    metrics_path = os.path.join(lp.model_path, "metrics.json")
+    with open(metrics_path, "w", encoding="utf-8") as metrics_file:
+        json.dump(metrics_output, metrics_file, indent=2)
+    print("  Metrics saved to {0}".format(metrics_path))
