@@ -32,7 +32,7 @@ litegs_fused = { path = "litegs/submodules/gaussian_raster" }
 no-build-isolation = true
 
 [tool.litegs.cuda]
-version = "12.1"
+version = "12.9"
 
 [tool.litegs.torch]
-index-url = "https://download.pytorch.org/whl/cu121"
+index-url = "https://download.pytorch.org/whl/cu129"
