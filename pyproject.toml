@@ -8,9 +8,6 @@ version = "0.0.0"
 description = "LiteGS environment"
 requires-python = ">=3.12"
 dependencies = [
-  "simple_knn",
-  "fused_ssim",
-  "litegs_fused",
   "torch==2.5.1",
   "torchvision==0.20.1",
   "torchaudio==2.5.1",
