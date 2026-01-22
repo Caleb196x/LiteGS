@@ -80,7 +80,7 @@ def run_cmd(cmd: list[str], cwd: Path | None = None, label: str | None = None) -
         if proc.stderr:
             print(proc.stderr, file=sys.stderr)
         raise RuntimeError(f"{prefix}Command failed with exit code {proc.returncode} after {elapsed:.2f}s")
-    print(f"{prefix}Done in {elapsed:.2f}s")
+    print(f"[{prefix}]: Done [{elapsed:.2f}s]")
     return elapsed
 
 
