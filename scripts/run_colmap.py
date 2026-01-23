@@ -70,17 +70,17 @@ def ensure_glomap() -> str:
 
 def run_cmd(cmd: list[str], cwd: Path | None = None, label: str | None = None) -> float:
     prefix = f"[{label}] " if label else ""
-    print(f"{prefix}Running: {' '.join(cmd)}")
+    # print(f"{prefix}Running: {' '.join(cmd)}")
     start = time.perf_counter()
     proc = subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     elapsed = time.perf_counter() - start
     if proc.returncode != 0:
-        if proc.stdout:
-            print(proc.stdout)
+        # if proc.stdout:
+        #     print(proc.stdout)
         if proc.stderr:
             print(proc.stderr, file=sys.stderr)
         raise RuntimeError(f"{prefix}Command failed with exit code {proc.returncode} after {elapsed:.2f}s")
-    print(f"[{prefix}]: Done [{elapsed:.2f}s]")
+    print(f"{prefix}Done [{elapsed:.2f}s]")
     return elapsed
 
 
@@ -169,9 +169,9 @@ def main() -> int:
         except Exception as e:
             print(f"model_converter failed (bin is still usable): {e}", file=sys.stderr)
 
-    print(f"Done. Sparse model at: {model_dir}")
+    # print(f"Done. Sparse model at: {model_dir}")
     total_elapsed = time.perf_counter() - total_start
-    print(f"Total time: {total_elapsed:.2f}s")
+    # print(f"Total time: {total_elapsed:.2f}s")
     return 0
 
 

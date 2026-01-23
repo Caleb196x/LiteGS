@@ -60,10 +60,10 @@ Gaussian splatting is a powerful technique used in various computer graphics and
 
     If you need to install the CUDA extensions manually (no build isolation):
 
-    ```powershell
-    pip install .\litegs\submodules\simple-knn --no-build-isolation -v
-    pip install .\litegs\submodules\fused_ssim --no-build-isolation -v
-    pip install .\litegs\submodules\gaussian_raster --no-build-isolation -v
+    ```bash
+    uv pip install ./litegs/submodules/simple-knn --no-build-isolation -v
+    uv pip install ./litegs/submodules/fused_ssim --no-build-isolation -v
+    uv pip install ./litegs/submodules/gaussian_raster --no-build-isolation -v
     ```
 
 4. If you need the CMake project (e.g. CUDA Debug in Visual Studio):
